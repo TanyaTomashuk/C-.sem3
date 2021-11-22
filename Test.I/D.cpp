@@ -21,12 +21,13 @@ struct Passenger{
     float anti_tg;
     float neural_activity;
     float mch;
+    float delta;
 };
 
 int main(){
     int N, k = -1, l = -1, m = -1;
+    float min1 = 1000000, min2 = 1000000, min3 = 1000000;
     int arr[3] = {0, 0, 0};
-    float delta1 = 1000000, delta2 = 1000000, delta3 = 1000000;
     cin >> N;
     vector<Passenger>passengers(N);
     
@@ -47,8 +48,8 @@ int main(){
         passengers[i].acat = 0;
         passengers[i].anti_tg = 0;
         passengers[i].mch = 0;
+        passengers[i].delta = 10000000;
     }
-    
     
     for(int i = 0 ; i < N - 1; i++) {
          for(int j = 0 ; j < N - i - 1; j++) {
@@ -69,7 +70,7 @@ int main(){
         passengers[0].neural_activity = 0;
     }
     
-    for(int i = 1; i < N - 1; i++) {
+    for(int i = 1; i < N; i++) {
         if ((passengers[i].id != passengers[i+1].id) && (passengers[i].id != passengers[i-1].id)){
             passengers[i].id = 0;
             passengers[i].neural_activity = 0;
@@ -77,62 +78,63 @@ int main(){
     }
     
     for (int i = 0; i < N; i++){
-        if ((passengers[i].id == passengers[i+1].id) && (passengers[i].id != 0)){
-            if ((passengers[i].neural_activity-passengers[i+1].neural_activity) < delta1){
-                delta1 = passengers[i].neural_activity-passengers[i+1].neural_activity;
-                k = i;
+        if (passengers[i].id == passengers[i+1].id){
+            if (abs(passengers[i].neural_activity - passengers[i+1].neural_activity) < passengers[i].delta){
+                passengers[i].delta = abs(passengers[i].neural_activity - passengers[i+1].neural_activity);
+                passengers[i+1].delta = abs(passengers[i].neural_activity - passengers[i+1].neural_activity);
+                
             }
         }
     }
     
-    for (int i = 0; i < N; i++){
-        if (passengers[i].id != passengers[k].id){
-            if ((passengers[i].id == passengers[i+1].id) && (passengers[i].id != 0)){
-                if ((passengers[i].neural_activity-passengers[i+1].neural_activity) < delta2){
-                    delta2 = passengers[i].neural_activity-passengers[i+1].neural_activity;
-                    l = i;
-                }
-            }
+    for(int i = 1; i < N; i++){
+        if ((min1 > passengers[i].delta) && (passengers[i].id != 0)) {
+            min1 = passengers[i].delta;
+            k = i;
         }
     }
     
-    for (int i = 0; i < N; i++){
-        if ((passengers[i].id != passengers[k].id) && (passengers[i].id != passengers[l].id)){
-            if ((passengers[i].id == passengers[i+1].id) && (passengers[i].id != 0)){
-                if ((passengers[i].neural_activity-passengers[i+1].neural_activity) < delta3){
-                    delta3 = passengers[i].neural_activity-passengers[i+1].neural_activity;
-                    m = i;
-                }
-            }
+    for(int i = 1; i < N; i++){
+        if ((min2 > passengers[i].delta) && (passengers[i].id != passengers[k].id)  && (passengers[i].id != 0)) {
+            min2 = passengers[i].delta;
+            l = i;
+        }
+    }
+    
+    for(int i = 1; i < N; i++){
+        if ((min3 > passengers[i].delta) && (passengers[i].id != passengers[k].id) && (passengers[i].id != passengers[l].id)  && (passengers[i].id != 0)) {
+            min3 = passengers[i].delta;
+            m = i;
         }
     }
     
     if (k != -1){
         arr[0] = passengers[k].id;
     }
+        
     if (l != -1){
         arr[1] = passengers[l].id;
     }
+        
     if (m != -1){
         arr[2] = passengers[m].id;
     }
-    
+        
     for(int i = 0 ; i < 2; i++) {
-         for(int j = 0 ; j < 2 - i; j++) {
-             if(arr[j] > arr[j+1]) {
-                 int temp1 = arr[j];
-                 arr[j] = arr[j+1];
-                 arr[j+1] = temp1;
-             }
-         }
-     }
-    
+        for(int j = 0 ; j < 2 - i; j++) {
+            if(arr[j] > arr[j+1]) {
+                int temp1 = arr[j];
+                arr[j] = arr[j+1];
+                arr[j+1] = temp1;
+            }
+        }
+    }
+        
     for (int i = 0; i < 3; i++){
         if (arr[i] != 0){
             cout << arr[i] << ' ';
         }
     }
-    
     
     if ((k == -1) && (m == -1) && (l == -1)) {cout << k;}
 }
