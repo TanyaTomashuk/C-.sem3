@@ -1,0 +1,457 @@
+#pragma once
+#ifndef UNICODE
+#define UNICODE
+#define UNICODE_WAS_UNDEFINED
+#endif
+ 
+#ifdef UNICODE_WAS_UNDEFINED
+#undef UNICODE
+#endif
+ 
+#include <iostream>
+#include <stdio.h>
+#include <math.h>
+#include <set>
+#include <vector>
+#include <string>
+#include <chrono>
+#include <Windows.h>
+#include <initializer_list>
+ 
+ 
+#ifndef isnan
+#define isnan(x) !(x == x)
+#endif
+ 
+ 
+const double EPS = 1e-6;
+ 
+ 
+ 
+template<typename T>
+class vector
+{
+    T x, y, z;
+};
+ 
+ 
+ 
+ 
+// 
+// Служебные структуры и функции
+// 
+struct Vec3
+{
+    double x, y, z;
+ 
+    Vec3() : x(0), y(0), z(0) {}
+    Vec3(double _value) : x(_value), y(_value), z(_value) {}
+    Vec3(double _x, double _y, double _z) : x(_x), y(_y), z(_z) {}
+    Vec3(const Vec3& v) : x(v.x), y(v.y), z(v.z) {}
+ 
+    void operator+=(const Vec3& other) { x += other.x; y += other.y; z += other.z; }
+    void operator-=(const Vec3& other) { x -= other.x; y -= other.y; z -= other.z; }
+    void operator/=(double div) { x /= div; y /= div; z /= div; }
+ 
+    Vec3 operator*(double k) const { return { x * k, y * k, z * k }; }
+    Vec3 operator/(double k) const { return { x / k, y / k, z / k }; }
+ 
+    Vec3 operator+(Vec3 const& other) const { return Vec3(x + other.x, y + other.y, z + other.z); }
+    Vec3 operator-(Vec3 const& other) const { return Vec3(x - other.x, y - other.y, z - other.z); }
+    Vec3 operator*(Vec3 const& other) const { return Vec3(x * other.x, y * other.y, z * other.z); }
+ 
+    Vec3 operator-() { return Vec3(-x, -y, -z); }
+    double length() const { return sqrt(x * x + y * y + z * z); }
+ 
+    double dot(const Vec3& other) const {
+        return x * other.x + y * other.y + z * other.z;
+    }
+ 
+    Vec3 cross(const Vec3& other) const {
+        return {
+            y * other.z - z * other.y,
+            z * other.x - x * other.z,
+            x * other.y - y * other.x
+        };
+    }
+ 
+    Vec3 normalized() const {
+        double l = length();
+        if (l < EPS) {
+            return { 0, 0, 0 };
+        }
+        else {
+            return (*this) / l;
+        }
+    }
+ 
+    Vec3 reflect(Vec3& n) const {
+        return (*this) - n * n.dot(*this) * 2;
+    }
+};
+ 
+ 
+struct Ray {
+    Vec3 orig;
+    Vec3 dir;
+ 
+    Ray(const Vec3& orig, const Vec3& dir) :
+        orig(orig),
+        dir(dir.normalized())
+    {}
+ 
+    Vec3 cast(double t) const {
+        return orig + dir * t;
+    }
+};
+ 
+ 
+int clamp(int a, int min, int max)
+{
+    if (a < min)
+        return min;
+ 
+    if (a > max)
+        return max;
+ 
+    return a;
+}
+ 
+class Hittable;
+ 
+struct Intersection {
+    Vec3 point;
+    Vec3 norm;
+ 
+    double dist;
+ 
+    Hittable* obj;
+ 
+    Intersection(Vec3 point = 0, Vec3 norm = 0, double dist = 0, Hittable* obj = nullptr) :
+        point(point),
+        norm(norm),
+        dist(dist),
+        obj(obj)
+    {}
+ 
+    bool operator<(const Intersection& other) {
+        if (isnan(dist)) return false;
+        if (isnan(other.dist)) return true;
+ 
+        return dist < other.dist;
+    }
+};
+ 
+ 
+class Hittable {
+public:
+    bool is_reflective = false;
+ 
+    virtual Intersection hit(const Ray& ray) = 0;
+    virtual Vec3 normal(Vec3 point) = 0;
+ 
+    virtual void set_position(const Vec3& pos) = 0;
+};
+ 
+ 
+const Intersection NO_INTERSECTION = { 0, 0, NAN };
+ 
+ 
+class Sphere : public Hittable {
+private:
+    Vec3 center;
+    double radius;
+ 
+public:
+    Sphere(Vec3 center, double radius) :
+        center(center),
+        radius(radius)
+    {}
+ 
+    virtual Intersection hit(const Ray& ray) override {
+        Vec3 c_o = ray.orig - center;
+        double disc = radius * radius - (c_o.dot(c_o) - ray.dir.dot(c_o) * ray.dir.dot(c_o));
+        if (disc < 0) {
+            return NO_INTERSECTION;
+        }
+ 
+        double b = -ray.dir.dot(c_o);
+        double d1 = b - sqrt(disc);
+        double d2 = b + sqrt(disc);
+        double d = -1;
+        if (d1 > 0 && (d2 > d1 || d2 < 0)) {
+            d = d1;
+        }
+        else if (d2 > 0 && (d1 > d2 || d1 < 0)) {
+            d = d2;
+        }
+        else {
+            return NO_INTERSECTION;
+        }
+ 
+        Vec3 point = ray.cast(d);
+ 
+        Intersection intr;
+        intr.point = point;
+        intr.dist = d;
+        intr.norm = this->normal(point);
+        intr.obj = this;
+        return intr;
+    }
+ 
+    Vec3 normal(Vec3 point) override {
+        return (point - center).normalized();
+    }
+ 
+    virtual void set_position(const Vec3& pos) {
+        center = pos;
+    }
+};
+ 
+ 
+class Camera {
+    Vec3 orig;
+    Vec3 dir;
+ 
+    double dist;
+ 
+    int px_width;
+    int px_height;
+ 
+    double real_width;
+    double real_height;
+ 
+    double aspect;
+ 
+    Vec3 left_upper_corner;
+    Vec3 ox_unit;
+    Vec3 oy_unit;
+ 
+    double pixel_aspect = 11.0f / 24.0f;
+ 
+public:
+    Camera(Vec3 orig, Vec3 dir, double dist, int px_w, int px_h, double real_w, double real_h, double aspect) :
+        orig(orig),
+        dir(dir.normalized()),
+        dist(dist),
+        px_width(px_w),
+        px_height(px_h),
+        real_width(real_w),
+        real_height(real_h),
+        aspect(aspect)
+    {
+        update();
+    }
+ 
+    void update() {
+        dir = dir.normalized();
+ 
+        Vec3 center = orig + dir * dist;
+        Vec3 v_up = { 0, 0, 1 };
+        Vec3 v_left = dir.cross(v_up);
+ 
+        center += v_up * real_height / 2;
+        center += v_left * real_width / 2;
+ 
+        left_upper_corner = center;
+        ox_unit = v_left * (-1);
+        oy_unit = v_up * (-1);
+    }
+ 
+    Ray get_ray(int x, int y) {
+        x *= pixel_aspect;
+        return { orig, left_upper_corner + ox_unit * x + oy_unit * y };
+    }
+};
+ 
+ 
+class Light {
+    Vec3 orig;
+    double luminos;
+ 
+public:
+    Light(const Vec3& orig, double luminos) :
+        orig(orig),
+        luminos(luminos)
+    {}
+ 
+    double illumination(const Vec3& p, const Vec3& norm) {
+        double ret = luminos;
+        Vec3 dir = p - orig;
+        double dist = dir.length();
+ 
+        dir = dir.normalized();
+        dir = dir * (-1);
+ 
+        double angle_cos = abs(dir.dot(norm.normalized()));
+ 
+        return luminos * angle_cos;
+    }
+ 
+    double get_max_lum() const {
+        return luminos;
+    }
+};
+ 
+class Scene {
+    std::vector<Hittable*> objects;
+    Light light;
+    Camera* camera;
+ 
+    int width;
+    int height;
+ 
+    int gradientSize = 16;
+ 
+    char* screen;
+ 
+public:
+    Scene(int width, int height) :
+        camera(new Camera(Vec3{ -100, 0, 2 }, Vec3{ 1, 0, 0 }, 2 * width, width, height, width, height, width / height)),
+        light(Vec3{ -100, 0, 40 }, 100),
+        width(width),
+        height(height),
+        screen(new char[width * height + 1])
+    {
+ 
+    }
+ 
+    ~Scene()
+    {
+        delete[] screen;
+        delete camera;
+ 
+        for (auto it = objects.begin(); it != objects.end(); it++)
+            delete *it;
+    }
+ 
+    void addObject(Hittable* obj) {
+        objects.push_back(obj);
+    }
+ 
+    std::vector<Hittable*>& get_objects() {
+        return objects;
+    }
+ 
+#define BACKGROUND_COLOR 0
+ 
+    double trace_ray(const Ray& ray, int depth = 5) {
+        if (depth == 0) {
+            return BACKGROUND_COLOR;
+        }
+ 
+        Intersection best_intr = NO_INTERSECTION;
+        for (auto& obj : objects) {
+            Intersection cur_intr = obj->hit(ray);
+ 
+            if (cur_intr < best_intr) {
+                best_intr = cur_intr;
+            }
+        }
+ 
+        if (isnan(best_intr.dist)) {
+            return BACKGROUND_COLOR;
+        }
+ 
+        if (best_intr.obj->is_reflective) {
+            Ray new_ray = { best_intr.point, ray.dir.reflect(best_intr.norm) };
+            return trace_ray(new_ray, depth - 1);
+        }
+        else {
+            return light.illumination(best_intr.point, best_intr.norm);
+        }
+    }
+ 
+    void draw()
+    {
+        char gradient[] = " .:!/r(l1Z4H9W8$@";
+        int gradientSize = 16;
+ 
+        for (int x = 0; x < width; ++x)
+        {
+            for (int y = 0; y < height; ++y)
+            {
+                Ray ray = camera->get_ray(x, y);
+                double color = trace_ray(ray);
+ 
+                const double coef = 10;
+                int grad_idx = clamp(color / light.get_max_lum() * coef, 0, gradientSize);
+                char symb = gradient[grad_idx];
+ 
+                screen[y * width + x] = symb;
+ 
+                // screen[y * width + x] = gradient[clamp(y, 0, gradientSize)];
+            }
+        }
+ 
+       screen[width * height] = 0;
+        printf("%s", screen);
+    }
+};
+ 
+void SetWindow(int Width, int Height)
+{
+    _COORD coord;
+    coord.X = Width;
+    coord.Y = Height;
+    _SMALL_RECT Rect;
+    Rect.Top = 0;
+    Rect.Left = 0;
+    Rect.Bottom = Height - 1;
+    Rect.Right = Width - 1;
+    HANDLE Handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleScreenBufferSize(Handle, coord);
+    SetConsoleWindowInfo(Handle, TRUE, &Rect);
+}
+ 
+int main()
+{
+    int width = 130;
+    int height = 40;
+    SetWindow(130, 40);
+ 
+    Scene scene(width, height);
+ 
+    scene.addObject(new Sphere({ 0, 0, -1000 }, 995));
+ 
+    Vec3 s_center = { 0, -30, 5 };
+    double rad = 10;
+ 
+    auto s1 = new Sphere({ 0, -30, 5 }, 5);
+    auto s2 = new Sphere({ 0, -25, 5 }, 3);
+    s1->is_reflective = false;
+    s2->is_reflective = false;
+ 
+    scene.addObject(s1);
+    scene.addObject(s2);
+ 
+    int a = 0;
+    double angle = 0;
+ 
+    std::string clearscr(width * height, '\r');
+ 
+    std::chrono::high_resolution_clock clock;
+    auto start = clock.now();
+    double velocity = 2;
+ 
+    while (true) {
+        angle = velocity * (double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() / 1000.0;
+ 
+        system("cls");
+ 
+        double cs = cos(angle);
+        double sn = sin(angle);
+ 
+        Vec3 s1p = { s_center.x + rad * cs, s_center.y + rad * sn, s_center.z };
+ 
+        s1->set_position(s1p);
+ 
+        scene.draw();
+ 
+        const int sleep_limit = 10000000;
+ 
+        for (int i = 0; i < sleep_limit; ++i) {
+            a++;
+        }
+    }   
+}
